@@ -125,9 +125,15 @@ class _OverlayAppState extends State<OverlayApp> {
                 ),
                 if (!_compact) ...[
                   Expanded(
-                    child: hidden
-                        ? const Center(child: Text('Paused • lyrics hidden'))
-                        : LyricsView(data: data, settings: c.settings),
+                    // Cache the painted lyrics layer: every window move
+                    // re-sends viewport metrics (full re-layout), but the
+                    // text itself is static during a drag and must not be
+                    // re-rasterized every frame.
+                    child: RepaintBoundary(
+                      child: hidden
+                          ? const Center(child: Text('Paused • lyrics hidden'))
+                          : LyricsView(data: data, settings: c.settings),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
