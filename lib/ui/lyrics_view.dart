@@ -131,6 +131,9 @@ class _LyricsViewState extends State<LyricsView> {
         'right' => TextAlign.right,
         _ => rtl ? TextAlign.right : TextAlign.left,
       };
+      // Keep typography identical for active and idle lines so wrapping
+      // never shifts when a line becomes active. Emphasis comes only from
+      // color, weight and glow, which do not affect layout.
       return AnimatedDefaultTextStyle(
         duration: Duration(milliseconds: ms),
         curve: Curves.easeOutCubic,
@@ -138,7 +141,7 @@ class _LyricsViewState extends State<LyricsView> {
         style: TextStyle(
           fontFamily: rtl ? 'Vazirmatn' : 'Manrope',
           fontFamilyFallback: const ['Vazirmatn'],
-          fontSize: current ? size : size * .8,
+          fontSize: size,
           height: (settings['lineHeight'] as num).toDouble(),
           fontWeight: current ? FontWeight.w700 : FontWeight.w400,
           color: current
@@ -157,48 +160,102 @@ class _LyricsViewState extends State<LyricsView> {
           text.isEmpty ? (data.synced ? '♪' : ' ') : text,
           textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
           textAlign: align,
+          softWrap: true,
         ),
       );
     }
 
     if (data.synced && settings['mode'] == 'focus') {
-      final text = active < 0 ? '♪' : data.lines[active].text;
+      final visible = ((settings['visibleLines'] as num?)?.toInt() ?? 3)
+          .clamp(1, 9);
+      final total = data.lines.length;
+      final int start;
+      if (total <= visible) {
+        start = 0;
+      } else if (active < 0) {
+        start = 0;
+      } else {
+        start = (active - visible ~/ 2).clamp(0, total - visible);
+      }
+      final end = (start + visible).clamp(0, total);
+      final focusKey = ValueKey('${data.title}-$active-$visible-$total');
+      List<Widget> rows() {
+        final out = <Widget>[];
+        if (active < 0) {
+          var shown = 0;
+          out.add(line('♪', current: true));
+          shown++;
+          for (var i = start; i < end && shown < visible; i++) {
+            out.add(const SizedBox(height: 10));
+            out.add(line(data.lines[i].text, faded: true));
+            shown++;
+          }
+          return out;
+        }
+        for (var i = start; i < end; i++) {
+          if (out.isNotEmpty) out.add(const SizedBox(height: 10));
+          final distance = (i - active).abs();
+          out.add(
+            line(
+              data.lines[i].text,
+              current: i == active,
+              faded: distance > 1,
+            ),
+          );
+        }
+        return out;
+      }
+
+      final useSlide = settings['animation'] == 'slide' && !reduced;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 22),
         child: Center(
           child: SingleChildScrollView(
-            child: AnimatedSwitcher(
-              duration: Duration(milliseconds: ms),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
+            child: ClipRect(
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: ms),
+                reverseDuration: Duration(milliseconds: ms),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder:
+                    (currentChild, previousChildren) => Stack(
+                      alignment: Alignment.center,
+                      children:
+                          [...previousChildren, currentChild]
+                              .whereType<Widget>()
+                              .toList(),
+                    ),
               transitionBuilder: (child, animation) {
-                final fade = FadeTransition(opacity: animation, child: child);
-                return settings['animation'] == 'slide'
-                    ? SlideTransition(
-                        position: Tween(
-                          begin: const Offset(0, .12),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: fade,
-                      )
-                    : fade;
+                if (!useSlide) {
+                  return FadeTransition(opacity: animation, child: child);
+                }
+                // Incoming slides up from below, outgoing slides up and out.
+                // Outgoing animation runs 1 -> 0, so a begin of (0, -0.45)
+                // moves it upward while fading.
+                final isIncoming = child.key == focusKey;
+                final begin = isIncoming
+                    ? const Offset(0, .45)
+                    : const Offset(0, -.45);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: begin,
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
               },
               child: SizedBox(
-                key: ValueKey('${data.title}-$active'),
+                key: focusKey,
                 width: double.infinity,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (active > 0)
-                      line(data.lines[active - 1].text, faded: true),
-                    const SizedBox(height: 12),
-                    line(text, current: true),
-                    const SizedBox(height: 12),
-                    if (active + 1 < data.lines.length)
-                      line(data.lines[active + 1].text, faded: true),
-                  ],
+                  children: rows(),
                 ),
+              ),
               ),
             ),
           ),
