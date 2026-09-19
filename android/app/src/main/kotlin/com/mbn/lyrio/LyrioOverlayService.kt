@@ -97,7 +97,7 @@ class LyrioOverlayService : Service() {
         // Hosted in a Dialog (not a raw WindowManager view) so the public
         // Window.setBackgroundBlurRadius API can blur only the area behind
         // this window. FLAG_BLUR_BEHIND would blur the whole screen instead.
-        val dlg = Dialog(this, android.R.style.Theme_Translucent_NoTitleBar).apply {
+        val dlg = Dialog(this, R.style.LyrioOverlay).apply {
             setCancelable(false)
             setCanceledOnTouchOutside(false)
         }
