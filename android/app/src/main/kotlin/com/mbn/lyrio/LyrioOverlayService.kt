@@ -116,18 +116,6 @@ class LyrioOverlayService : Service() {
         clampPosition()
         params.flags = params.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON.inv()
         if (settings.optBoolean("keepScreenOn")) params.flags = params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        // Frosted glass behind the window. The system may disable blur at
-        // runtime (e.g. battery saver); content stays readable via opacity.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val radius = settings.optDouble("blurRadius", 40.0).toInt().coerceIn(0, 100)
-            if (settings.optBoolean("blurBehind") && radius > 0) {
-                params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                params.blurBehindRadius = radius
-            } else {
-                params.flags = params.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                params.blurBehindRadius = 0
-            }
-        }
     }
     fun applySettings() {
         if (view == null) return
