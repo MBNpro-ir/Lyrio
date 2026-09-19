@@ -11,6 +11,7 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
   Json settings = {...defaultSettings};
   String? error;
   bool loading = true, _reading = false, _disposed = false;
+  String? _lastRaw;
   final bool started;
   bool stateLoaded = false;
   bool _pending = false;
@@ -47,21 +48,24 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
     _reading = true;
     try {
       final raw = await channel.invokeMethod<String>('state');
-      if (raw != null && !_disposed) {
-        snapshot = AppSnapshot(jsonDecode(raw) as Json);
-        stateLoaded = true;
-        if (!_pending) settings = snapshot.settings;
-        if (snapshot.serviceError.isNotEmpty) error = snapshot.serviceError;
-      }
+      loading = false;
+      if (raw == null || _disposed) return;
+      // The timer ticks 5x/sec; while paused the bytes are identical, so
+      // skip the decode and the full-tree rebuild entirely.
+      if (raw == _lastRaw && !_pending) return;
+      _lastRaw = raw;
+      snapshot = AppSnapshot(jsonDecode(raw) as Json);
+      stateLoaded = true;
+      if (!_pending) settings = snapshot.settings;
+      if (snapshot.serviceError.isNotEmpty) error = snapshot.serviceError;
     } on PlatformException catch (e) {
       error = e.message;
     } on MissingPluginException {
       error = 'Lyrio needs its Android companion. Run the Android build.';
     } finally {
       _reading = false;
-      loading = false;
-      if (!_disposed) notifyListeners();
     }
+    if (!_disposed) notifyListeners();
   }
 
   /// Fire-and-forget window drag: deltas batch into one platform message
