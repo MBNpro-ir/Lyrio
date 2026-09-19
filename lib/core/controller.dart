@@ -72,22 +72,47 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
   /// the window overshoot and shake. An absolute target is immune to that —
   /// every update carries the latest truth, dropped events don't matter.
   bool _dragging = false;
+  String? _queuedDragMethod;
+  Offset? _queuedDragPoint;
+  Future<void>? _dragDrain;
 
-  void dragStart(Offset point) => _sendDrag('dragStart', point);
+  void dragStart(Offset point) => _queueDrag('dragStart', point);
 
-  void dragTo(Offset point) => _sendDrag('dragTo', point);
+  void dragTo(Offset point) => _queueDrag('dragTo', point);
 
-  Future<void> _sendDrag(String method, Offset point) async {
+  /// Keep at most one platform message in flight. The native overlay handles
+  /// the normal path directly, but this fallback must not build a MethodChannel
+  /// backlog if an older Flutter view still owns the gesture.
+  void _queueDrag(String method, Offset point) {
+    _queuedDragMethod = method;
+    _queuedDragPoint = point;
+    _dragDrain ??= _drainDrag();
+  }
+
+  Future<void> _drainDrag() async {
     try {
-      await channel.invokeMethod<dynamic>(method, {
-        'x': point.dx,
-        'y': point.dy,
-      });
-    } on PlatformException catch (e) {
-      error = e.message;
-      if (!_disposed) notifyListeners();
-    } on MissingPluginException {
-      // Overlay dragging only exists on Android.
+      while (_queuedDragPoint != null && !_disposed) {
+        final method = _queuedDragMethod!;
+        final point = _queuedDragPoint!;
+        _queuedDragMethod = null;
+        _queuedDragPoint = null;
+        try {
+          await channel.invokeMethod<dynamic>(method, {
+            'x': point.dx,
+            'y': point.dy,
+          });
+        } on PlatformException catch (e) {
+          error = e.message;
+          if (!_disposed) notifyListeners();
+        } on MissingPluginException {
+          // Overlay dragging only exists on Android.
+        }
+      }
+    } finally {
+      _dragDrain = null;
+      if (_queuedDragPoint != null && !_disposed) {
+        _dragDrain = _drainDrag();
+      }
     }
   }
 
@@ -102,6 +127,8 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Persists the dragged position once, when the gesture ends.
   Future<void> endMove() async {
+    final drain = _dragDrain;
+    if (drain != null) await drain;
     try {
       await channel.invokeMethod<dynamic>('moveEnd');
     } catch (_) {}

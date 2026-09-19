@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.Choreographer
+import android.view.MotionEvent
 import android.view.Window
 import android.view.WindowManager
 import io.flutter.FlutterInjector
@@ -95,6 +96,10 @@ class LyrioOverlayService : Service() {
         view = FlutterView(this, FlutterTextureView(this).apply { isOpaque = false }).apply {
             attachToFlutterEngine(engine!!)
             setBackgroundColor(Color.TRANSPARENT)
+            // Keep high-frequency drag events on Android's view thread. A
+            // MethodChannel round-trip for every MotionEvent can lag behind
+            // the finger and apply stale positions after newer ones.
+            setOnTouchListener { _, event -> handleNativeDragTouch(event) }
         }
         // Hosted in a Dialog (not a raw WindowManager view) so the public
         // Window.setBackgroundBlurRadius API can blur only the area behind
@@ -138,10 +143,12 @@ class LyrioOverlayService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val wm = getSystemService(WindowManager::class.java)
             Log.d("LyrioOverlay", "applyBlur enabled=$enabled radius=$radius crossWindowBlur=${wm.isCrossWindowBlurEnabled} sdk=${Build.VERSION.SDK_INT}")
-            w.setBackgroundBlurRadius(if (enabled) radius else 0)
+            configuredBlurRadius = if (enabled) radius else 0
+            w.setBackgroundBlurRadius(if (dragging) 0 else configuredBlurRadius)
         }
     }
     private var movePending = false
+    private var moveCallback: Choreographer.FrameCallback? = null
     // Absolute drag state: grab offset between finger and window origin.
     private var grabDX = 0f
     private var grabDY = 0f
@@ -154,6 +161,8 @@ class LyrioOverlayService : Service() {
     private var maxY = 0
     private var dragging = false
     private var appliedFrames = 0
+    private var nativeDragTouch = false
+    private var configuredBlurRadius = 0
     /** Touch events arrive faster than the display refresh. Applying the
      * window layout on every event relayouts the Flutter view dozens of
      * times per second (log: "Sending viewport metrics") and shakes.
@@ -161,12 +170,25 @@ class LyrioOverlayService : Service() {
     private fun scheduleMoveApply() {
         if (movePending) return
         movePending = true
-        Choreographer.getInstance().postFrameCallback {
-            movePending = false
-            appliedFrames++
-            val w = dialog?.window ?: return@postFrameCallback
-            runCatching { w.attributes = params }.onFailure { stopSelf() }
+        val callback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                // endMove() may have committed the final position and removed
+                // this callback while it was waiting for the next frame.
+                if (moveCallback !== this) return
+                moveCallback = null
+                movePending = false
+                appliedFrames++
+                val w = dialog?.window ?: return
+                runCatching { w.attributes = params }.onFailure { stopSelf() }
+            }
         }
+        moveCallback = callback
+        Choreographer.getInstance().postFrameCallback(callback)
+    }
+    private fun cancelMoveCallback() {
+        moveCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        moveCallback = null
+        movePending = false
     }
     private fun clampPosition() {
         params.x = params.x.coerceIn(0, maxX)
@@ -192,10 +214,51 @@ class LyrioOverlayService : Service() {
         applyBlur(w)
         runCatching { w.attributes = params }.onFailure { stopSelf() }
     }
-    fun dragStart(x: Float, y: Float) {
+    /** True for the title/handle part of the header; leave the two buttons to Flutter. */
+    private fun canStartNativeDrag(event: MotionEvent): Boolean {
+        val overlay = view ?: return false
+        if (lockedCached || overlay.width <= 0) return false
+        val headerHeight = (if (isCompact) 68 else 48) * densityPx
+        val controlsWidth = 104 * densityPx
+        return event.y <= headerHeight && event.x < overlay.width - controlsWidth
+    }
+
+    private fun handleNativeDragTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (!canStartNativeDrag(event)) return false
+                nativeDragTouch = true
+                dragStartPixels(event.rawX, event.rawY)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> if (nativeDragTouch) {
+                dragToPixels(event.rawX, event.rawY)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (nativeDragTouch) {
+                nativeDragTouch = false
+                endMove()
+                return true
+            }
+        }
+        return nativeDragTouch
+    }
+
+    private fun suspendBlurForDrag() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || configuredBlurRadius <= 0) return
+        dialog?.window?.setBackgroundBlurRadius(0)
+    }
+
+    private fun restoreBlurAfterDrag() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        dialog?.window?.setBackgroundBlurRadius(configuredBlurRadius)
+    }
+
+    private fun dragStartPixels(x: Float, y: Float) {
         if (view == null || dialog?.window == null || lockedCached) return
-        grabDX = x * densityPx - params.x
-        grabDY = y * densityPx - params.y
+        suspendBlurForDrag()
+        grabDX = x - params.x
+        grabDY = y - params.y
         if (!dragging) {
             dragging = true
             appliedFrames = 0
@@ -203,31 +266,41 @@ class LyrioOverlayService : Service() {
             Log.d("LyrioOverlay", "drag start at ${params.x},${params.y}")
         }
     }
-    fun dragTo(x: Float, y: Float) {
+
+    private fun dragToPixels(x: Float, y: Float) {
         if (view == null || dialog?.window == null || lockedCached) return
         if (!dragging) {
-            // Start missed (e.g. service restarted mid-gesture): anchor here
+            // Start missed (for example after a service restart): anchor here
             // so the window never jumps.
-            dragStart(x, y)
+            dragStartPixels(x, y)
             return
         }
         dragEvents++
-        params.x = (x * densityPx - grabDX).toInt()
-        params.y = (y * densityPx - grabDY).toInt()
+        params.x = (x - grabDX).toInt()
+        params.y = (y - grabDY).toInt()
         clampPosition()
         scheduleMoveApply()
     }
+
+    // MethodChannel fallback for older/restarted Flutter views. The normal
+    // path uses raw MotionEvents above and therefore never crosses Dart.
+    fun dragStart(x: Float, y: Float) {
+        dragStartPixels(x * densityPx, y * densityPx)
+    }
+
+    fun dragTo(x: Float, y: Float) {
+        dragToPixels(x * densityPx, y * densityPx)
+    }
     fun endMove() {
         if (view == null) return
-        if (movePending) {
-            movePending = false
+        cancelMoveCallback()
+        if (dragging) {
             appliedFrames++
             dialog?.window?.let { w -> runCatching { w.attributes = params } }
-        }
-        if (dragging) {
             dragging = false
             Log.d("LyrioOverlay", "drag end at ${params.x},${params.y} events=$dragEvents appliedFrames=$appliedFrames")
         }
+        restoreBlurAfterDrag()
         LyrioCore.preferences().edit().putInt("windowX", params.x).putInt("windowY", params.y).apply()
     }
     fun compact(value: Boolean) { isCompact = value; applySettings() }
@@ -235,6 +308,7 @@ class LyrioOverlayService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) { /* Service and its engine intentionally outlive the task. */ }
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
+        cancelMoveCallback()
         runCatching { if (dialog?.isShowing == true) dialog?.dismiss() }
         dialog = null
         view?.let { it.detachFromFlutterEngine() }
