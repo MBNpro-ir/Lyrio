@@ -198,7 +198,7 @@ class SettingsPage extends StatelessWidget {
                 _slider(
                   c,
                   'visibleLines',
-                  'Visible lines',
+                  'Focus lines',
                   1,
                   9,
                   '',

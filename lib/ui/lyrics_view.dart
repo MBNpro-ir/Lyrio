@@ -21,6 +21,7 @@ class _LyricsViewState extends State<LyricsView> {
   final _scroll = ScrollController();
   List<GlobalKey> _keys = [];
   int _lastLine = -2;
+  double _lastAlignment = .35;
   String _lastText = '';
   DateTime _manualUntil = DateTime(2000);
   Timer? _resume;
@@ -33,7 +34,7 @@ class _LyricsViewState extends State<LyricsView> {
     super.dispose();
   }
 
-  void _follow(int index, int millis) {
+  void _follow(int index, int millis, [double alignment = .35]) {
     if (_scheduled || index < 0) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -47,7 +48,7 @@ class _LyricsViewState extends State<LyricsView> {
       if (context != null) {
         Scrollable.ensureVisible(
           context,
-          alignment: .35,
+          alignment: alignment,
           duration: Duration(milliseconds: millis),
           curve: Curves.easeOutCubic,
         );
@@ -165,103 +166,15 @@ class _LyricsViewState extends State<LyricsView> {
       );
     }
 
-    if (data.synced && settings['mode'] == 'focus') {
-      final visible = ((settings['visibleLines'] as num?)?.toInt() ?? 3)
-          .clamp(1, 9);
-      final total = data.lines.length;
-      final int start;
-      if (total <= visible) {
-        start = 0;
-      } else if (active < 0) {
-        start = 0;
-      } else {
-        start = (active - visible ~/ 2).clamp(0, total - visible);
-      }
-      final end = (start + visible).clamp(0, total);
-      final focusKey = ValueKey('${data.title}-$active-$visible-$total');
-      List<Widget> rows() {
-        final out = <Widget>[];
-        if (active < 0) {
-          var shown = 0;
-          out.add(line('♪', current: true));
-          shown++;
-          for (var i = start; i < end && shown < visible; i++) {
-            out.add(const SizedBox(height: 10));
-            out.add(line(data.lines[i].text, faded: true));
-            shown++;
-          }
-          return out;
-        }
-        for (var i = start; i < end; i++) {
-          if (out.isNotEmpty) out.add(const SizedBox(height: 10));
-          final distance = (i - active).abs();
-          out.add(
-            line(
-              data.lines[i].text,
-              current: i == active,
-              faded: distance > 1,
-            ),
-          );
-        }
-        return out;
-      }
-
-      final useSlide = settings['animation'] == 'slide' && !reduced;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        child: Center(
-          child: SingleChildScrollView(
-            child: ClipRect(
-              child: AnimatedSwitcher(
-                duration: Duration(milliseconds: ms),
-                reverseDuration: Duration(milliseconds: ms),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                layoutBuilder:
-                    (currentChild, previousChildren) => Stack(
-                      alignment: Alignment.center,
-                      children:
-                          [...previousChildren, currentChild]
-                              .whereType<Widget>()
-                              .toList(),
-                    ),
-              transitionBuilder: (child, animation) {
-                if (!useSlide) {
-                  return FadeTransition(opacity: animation, child: child);
-                }
-                // Incoming slides up from below, outgoing slides up and out.
-                // Outgoing animation runs 1 -> 0, so a begin of (0, -0.45)
-                // moves it upward while fading.
-                final isIncoming = child.key == focusKey;
-                final begin = isIncoming
-                    ? const Offset(0, .45)
-                    : const Offset(0, -.45);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween(
-                      begin: begin,
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                );
-              },
-              child: SizedBox(
-                key: focusKey,
-                width: double.infinity,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: rows(),
-                ),
-              ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    // Focus scrolls line-by-line exactly like "All lines": the list glides
+    // upward and the active line is highlighted. No text is ever swapped,
+    // so nothing flashes or restarts. `visibleLines` sets how many lines
+    // around the active one stay prominent in focus mode.
+    final isFocus = data.synced && settings['mode'] == 'focus';
+    final focusRadius = isFocus
+        ? (((settings['visibleLines'] as num?)?.toInt() ?? 3).clamp(1, 9) ~/
+                2)
+        : 1;
     final text = data.plain.isNotEmpty
         ? data.plain
         : data.lines.map((e) => e.text).join('\n');
@@ -279,7 +192,8 @@ class _LyricsViewState extends State<LyricsView> {
     }
     if (data.synced && active != _lastLine) {
       _lastLine = active;
-      _follow(active, ms);
+      _lastAlignment = isFocus ? .45 : .35;
+      _follow(active, ms, _lastAlignment);
     }
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -288,7 +202,7 @@ class _LyricsViewState extends State<LyricsView> {
           _manualUntil = DateTime.now().add(const Duration(seconds: 5));
           _resume?.cancel();
           _resume = Timer(const Duration(seconds: 5), () {
-            if (mounted) _follow(_lastLine, ms);
+            if (mounted) _follow(_lastLine, ms, _lastAlignment);
           });
         }
         return false;
@@ -306,7 +220,9 @@ class _LyricsViewState extends State<LyricsView> {
                 child: line(
                   rows[i],
                   current: !data.synced || i == active,
-                  faded: data.synced && i < active,
+                  faded: isFocus
+                      ? (active < 0 || (i - active).abs() > focusRadius)
+                      : (data.synced && i < active),
                 ),
               ),
             if ((data.lyrics['attribution'] as String? ?? '').isNotEmpty)
