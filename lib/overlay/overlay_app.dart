@@ -32,18 +32,26 @@ class _OverlayAppState extends State<OverlayApp> {
       );
       final theme = lyrioTheme(seed, dark ? Brightness.dark : Brightness.light);
       final hidden = c.flag('hidePaused') && !data.playing && data.timing;
+      final cover = c.flag('coverColor') && data.coverColor != 0
+          ? Color(data.coverColor)
+          : null;
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: theme,
         home: Material(
           type: MaterialType.transparency,
-          child: Container(
+          // AnimatedContainer cross-fades the background when the track
+          // (and its cover color) changes.
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOutCubic,
             margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             decoration: windowDecoration(
               theme.colorScheme,
               c.settings,
               shadow: false,
+              cover: cover,
             ),
             child: Column(
               children: [

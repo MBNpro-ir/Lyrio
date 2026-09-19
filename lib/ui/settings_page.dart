@@ -91,6 +91,13 @@ class SettingsPage extends StatelessWidget {
                   'Use your Android wallpaper palette',
                   Icons.palette_outlined,
                 ),
+                _toggle(
+                  c,
+                  'coverColor',
+                  'Match cover art',
+                  'Tint the floating window with the album color',
+                  Icons.album_outlined,
+                ),
                 if (!c.flag('dynamicColor'))
                   Padding(
                     padding: const EdgeInsets.all(16),

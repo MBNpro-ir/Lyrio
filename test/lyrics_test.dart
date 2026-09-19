@@ -52,4 +52,13 @@ void main() {
     expect(state.lines.length, 1);
     expect(state.synced, false);
   });
+  test('Cover color defaults to none and parses when present', () {
+    expect(AppSnapshot({}).coverColor, 0);
+    expect(
+      AppSnapshot({
+        'track': {'coverColor': 4278190335},
+      }).coverColor,
+      4278190335,
+    );
+  });
 }

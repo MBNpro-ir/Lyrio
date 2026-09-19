@@ -292,10 +292,13 @@ class HomePage extends StatelessWidget {
           Container(
             height: 260,
             clipBehavior: Clip.antiAlias,
-            decoration: windowDecoration(colors, {
-              ...c.settings,
-              'opacity': 1.0,
-            }),
+            decoration: windowDecoration(
+              colors,
+              {...c.settings, 'opacity': 1.0},
+              cover: c.flag('coverColor') && data.coverColor != 0
+                  ? Color(data.coverColor)
+                  : null,
+            ),
             child: LyricsView(data: data, settings: c.settings),
           ),
           if (data.status == 'ready')

@@ -4,6 +4,8 @@ import android.app.NotificationManager
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -107,7 +109,7 @@ object LyrioCore {
         fallbackKey = key
         fallback = JSONObject().put("title", title).put("artist", artist).put("album", "")
             .put("displayTitle", title).put("displaySubtitle", artist).put("composer", "").put("genre", "")
-            .put("trackNumber", 0).put("year", 0)
+            .put("trackNumber", 0).put("year", 0).put("coverColor", 0)
             .put("package", packageName).put("source", label(packageName)).put("timingAvailable", false)
         updateTrack()
     }
@@ -117,6 +119,31 @@ object LyrioCore {
     private fun label(pkg: String): String = runCatching {
         context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString()
     }.getOrDefault(pkg)
+    /** Dominant cover-art color as 0xFFRRGGBB (0 when no art). Tiny 8x8
+     * downscale keeps it microseconds-cheap on the metadata thread. */
+    private fun coverColorOf(metadata: MediaMetadata): Long {
+        return runCatching {
+            val art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                ?: return 0L
+            val small = Bitmap.createScaledBitmap(art, 8, 8, true)
+            var r = 0L; var g = 0L; var b = 0L; var n = 0L
+            for (x in 0 until small.width) for (y in 0 until small.height) {
+                val px = small.getPixel(x, y)
+                if (Color.alpha(px) < 128) continue
+                r += Color.red(px); g += Color.green(px); b += Color.blue(px); n++
+            }
+            if (n == 0L) return 0L
+            r /= n; g /= n; b /= n
+            // Gentle saturation so grey covers still tint the glass.
+            val lum = 0.299 * r + 0.587 * g + 0.114 * b
+            r = (r + (r - lum) * 0.35).toLong().coerceIn(0, 255)
+            g = (g + (g - lum) * 0.35).toLong().coerceIn(0, 255)
+            b = (b + (b - lum) * 0.35).toLong().coerceIn(0, 255)
+            0xFF000000L or (r shl 16) or (g shl 8) or b
+        }.getOrDefault(0L)
+    }
     private fun updateTrack() {
         selected = controllers.keys.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             ?: selected?.takeIf { it in controllers.keys }
@@ -134,6 +161,7 @@ object LyrioCore {
             .put("genre", metadata.getString(MediaMetadata.METADATA_KEY_GENRE) ?: "")
             .put("trackNumber", metadata.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER))
             .put("year", metadata.getLong(MediaMetadata.METADATA_KEY_YEAR).takeIf { it > 0 } ?: metadata.getString(MediaMetadata.METADATA_KEY_DATE)?.take(4)?.toLongOrNull() ?: 0L)
+            .put("coverColor", coverColorOf(metadata))
             .put("source", label(controller!!.packageName)).put("package", controller.packageName)
             .put("timingAvailable", controller.playbackState?.position?.let { it >= 0 } == true)
         val next = listOf(track.optString("title"), track.optString("artist"), track.optString("album"), track.optLong("duration"), track.optString("displayTitle")).joinToString("|")

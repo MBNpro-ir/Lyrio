@@ -290,10 +290,26 @@ BoxDecoration windowDecoration(
   ColorScheme colors,
   Json settings, {
   bool shadow = true,
+  Color? cover,
 }) {
   final preset = settings['preset'];
   final opacity = (settings['opacity'] as num).toDouble();
-  final gradient = switch (preset) {
+  final LinearGradient? coverGradient = cover == null
+      ? null
+      : LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cover.withValues(alpha: opacity),
+            HSLColor.fromColor(cover)
+                .withLightness(
+                  (HSLColor.fromColor(cover).lightness * 0.65).clamp(0.0, 1.0),
+                )
+                .toColor()
+                .withValues(alpha: opacity),
+          ],
+        );
+  final LinearGradient? presetGradient = switch (preset) {
     'aurora' => LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -320,6 +336,8 @@ BoxDecoration windowDecoration(
     ),
     _ => null,
   };
+  // Cover art wins over the preset look while a track with art plays.
+  final gradient = coverGradient ?? presetGradient;
   return BoxDecoration(
     color: gradient == null
         ? colors.surfaceContainerHigh.withValues(alpha: opacity)

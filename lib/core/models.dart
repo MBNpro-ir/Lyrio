@@ -102,6 +102,7 @@ const defaultSettings = <String, dynamic>{
   'theme': 'system',
   'dynamicColor': true,
   'accent': 0xff8065ff,
+  'coverColor': true,
   'preset': 'aurora',
   'fontSize': 22.0,
   'opacity': .94,
@@ -156,6 +157,7 @@ class AppSnapshot {
   bool get timing => track['timingAvailable'] == true;
   int get position => (track['position'] as num?)?.toInt() ?? 0;
   int get duration => (track['duration'] as num?)?.toInt() ?? 0;
+  int get coverColor => (track['coverColor'] as num?)?.toInt() ?? 0;
   String get status => lyrics['status'] as String? ?? 'idle';
   String get plain => lyrics['plain'] as String? ?? '';
   bool get synced => lines.isNotEmpty && timing;
