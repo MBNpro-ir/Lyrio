@@ -88,6 +88,8 @@ const defaultSettings = <String, dynamic>{
   'showHeader': true,
   'hidePaused': false,
   'keepScreenOn': false,
+  'locked': false,
+  'visibleLines': 3.0,
   'offsetMs': 0.0,
   'provider': 'auto',
   'fallback': true,

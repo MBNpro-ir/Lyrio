@@ -104,7 +104,7 @@ class LyrioOverlayService : Service() {
     private fun sizeAndClamp() {
         val settings = LyrioCore.settings()
         val metrics = resources.displayMetrics
-        params.width = (settings.optDouble("width", 340.0) * density).toInt().coerceIn((200 * density).toInt().coerceAtMost(metrics.widthPixels), metrics.widthPixels)
+        params.width = (settings.optDouble("width", 340.0) * density).toInt().coerceIn((160 * density).toInt().coerceAtMost(metrics.widthPixels), metrics.widthPixels)
         params.height = ((if (isCompact) 76.0 else settings.optDouble("height", 310.0)) * density).toInt().coerceIn((64 * density).toInt(), metrics.heightPixels - (40 * density).toInt())
         params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
         params.y = params.y.coerceIn(0, (metrics.heightPixels - params.height - (32 * density).toInt()).coerceAtLeast(0))
@@ -118,6 +118,7 @@ class LyrioOverlayService : Service() {
     }
     fun move(dx: Float, dy: Float) {
         if (view == null) return
+        if (LyrioCore.settings().optBoolean("locked")) return
         params.x += (dx * density).toInt()
         params.y += (dy * density).toInt()
         applySettings()

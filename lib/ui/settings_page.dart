@@ -130,18 +130,27 @@ class SettingsPage extends StatelessWidget {
             Section(
               title: 'Floating window',
               children: [
-                _slider(c, 'width', 'Width', 240, 600, 'dp'),
-                _slider(c, 'height', 'Height', 200, 600, 'dp'),
+                _slider(c, 'width', 'Width', 200, 800, 'dp', divisions: 60),
+                _slider(c, 'height', 'Height', 140, 900, 'dp', divisions: 76),
                 _slider(
                   c,
                   'opacity',
                   'Background opacity',
-                  .4,
+                  0,
                   1,
                   '%',
                   multiplier: 100,
+                  divisions: 100,
                 ),
-                _slider(c, 'radius', 'Corner radius', 0, 42, 'dp'),
+                _slider(
+                  c,
+                  'radius',
+                  'Corner radius',
+                  0,
+                  100,
+                  'dp',
+                  divisions: 100,
+                ),
                 _toggle(
                   c,
                   'showHeader',
@@ -163,6 +172,13 @@ class SettingsPage extends StatelessWidget {
                   'While the floating window is enabled',
                   Icons.light_mode_outlined,
                 ),
+                _toggle(
+                  c,
+                  'locked',
+                  'Position lock',
+                  'Prevent moving the floating window',
+                  Icons.lock_outline_rounded,
+                ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(18, 0, 18, 16),
                   child: Text(
@@ -179,15 +195,33 @@ class SettingsPage extends StatelessWidget {
                   'focus': 'Focus',
                   'full': 'All lines',
                 }),
-                _slider(c, 'fontSize', 'Text size', 14, 36, 'sp'),
+                _slider(
+                  c,
+                  'visibleLines',
+                  'Visible lines',
+                  1,
+                  9,
+                  '',
+                  divisions: 8,
+                ),
+                _slider(
+                  c,
+                  'fontSize',
+                  'Text size',
+                  10,
+                  100,
+                  'sp',
+                  divisions: 90,
+                ),
                 _slider(
                   c,
                   'lineHeight',
                   'Line spacing',
-                  1.1,
-                  2,
+                  1,
+                  3,
                   '×',
                   decimals: 2,
+                  divisions: 40,
                 ),
                 _choices(c, 'Alignment', 'alignment', {
                   'auto': 'Auto',
@@ -200,8 +234,24 @@ class SettingsPage extends StatelessWidget {
                   'fade': 'Fade',
                   'none': 'None',
                 }),
-                _slider(c, 'duration', 'Transition duration', 150, 900, 'ms'),
-                _slider(c, 'offsetMs', 'Sync adjustment', -5000, 5000, 'ms'),
+                _slider(
+                  c,
+                  'duration',
+                  'Transition duration',
+                  0,
+                  2000,
+                  'ms',
+                  divisions: 100,
+                ),
+                _slider(
+                  c,
+                  'offsetMs',
+                  'Sync adjustment',
+                  -10000,
+                  10000,
+                  'ms',
+                  divisions: 200,
+                ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 18),
                   child: Text(
@@ -419,6 +469,7 @@ class SettingsPage extends StatelessWidget {
     String unit, {
     int multiplier = 1,
     int decimals = 0,
+    int? divisions,
   }) {
     final value = c.number(key).clamp(min, max);
     final label = '${(value * multiplier).toStringAsFixed(decimals)}$unit';
@@ -448,7 +499,7 @@ class SettingsPage extends StatelessWidget {
             min: min,
             max: max,
             label: label,
-            divisions: key == 'offsetMs' ? 100 : 40,
+            divisions: divisions ?? 40,
             onChanged: (v) => c.set(key, v),
           ),
         ],

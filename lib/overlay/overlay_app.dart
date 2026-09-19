@@ -45,10 +45,12 @@ class _OverlayAppState extends State<OverlayApp> {
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onPanUpdate: (event) => c.action('move', {
-                    'dx': event.delta.dx,
-                    'dy': event.delta.dy,
-                  }),
+                  onPanUpdate: c.flag('locked')
+                      ? null
+                      : (event) => c.action('move', {
+                          'dx': event.delta.dx,
+                          'dy': event.delta.dy,
+                        }),
                   child: SizedBox(
                     height: _compact ? 68 : 48,
                     child: Padding(
@@ -56,7 +58,9 @@ class _OverlayAppState extends State<OverlayApp> {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.drag_indicator_rounded,
+                            c.flag('locked')
+                                ? Icons.lock_outline_rounded
+                                : Icons.drag_indicator_rounded,
                             size: 18,
                             color: theme.colorScheme.primary,
                           ),
