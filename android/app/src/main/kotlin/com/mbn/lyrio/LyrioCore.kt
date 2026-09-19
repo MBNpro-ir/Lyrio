@@ -47,7 +47,7 @@ object LyrioCore {
     }
     fun preferences() = context.getSharedPreferences("lyrio", Context.MODE_PRIVATE)
     fun settings(): JSONObject {
-        val defaults = JSONObject("""{"theme":"system","dynamicColor":true,"accent":4286605311,"preset":"aurora","fontSize":22,"opacity":0.94,"width":340,"height":310,"radius":28,"lineHeight":1.55,"alignment":"auto","mode":"focus","animation":"slide","duration":420,"glow":true,"showHeader":true,"hidePaused":false,"keepScreenOn":false,"locked":false,"visibleLines":3,"offsetMs":0,"provider":"auto","fallback":true,"providers":[]}""")
+        val defaults = JSONObject("""{"theme":"system","dynamicColor":true,"accent":4286605311,"preset":"aurora","fontSize":22,"opacity":0.94,"width":340,"height":310,"radius":28,"lineHeight":1.55,"alignment":"auto","mode":"focus","animation":"slide","duration":420,"glow":true,"showHeader":true,"hidePaused":false,"keepScreenOn":false,"locked":false,"visibleLines":3,"blurBehind":false,"blurRadius":40,"offsetMs":0,"provider":"auto","fallback":true,"providers":[]}""")
         val saved = runCatching { JSONObject(preferences().getString("settings", "{}")!!) }.getOrDefault(JSONObject())
         saved.keys().forEach { defaults.put(it, saved.get(it)) }
         return defaults

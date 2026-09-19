@@ -1,5 +1,6 @@
 package com.mbn.lyrio
 
+import android.app.Dialog
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,11 +12,14 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.Window
 import android.view.WindowManager
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterTextureView
@@ -28,7 +32,7 @@ class LyrioOverlayService : Service() {
     companion object { var instance: LyrioOverlayService? = null; private const val CHANNEL = "floating_lyrics" }
     private var engine: FlutterEngine? = null
     private var view: FlutterView? = null
-    private lateinit var manager: WindowManager
+    private var dialog: Dialog? = null
     private lateinit var params: WindowManager.LayoutParams
     private var isCompact = false
     private val screenReceiver = object : BroadcastReceiver() {
@@ -43,7 +47,6 @@ class LyrioOverlayService : Service() {
         super.onCreate()
         LyrioCore.init(this)
         instance = this
-        manager = getSystemService(WindowManager::class.java)
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_SCREEN_ON) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(screenReceiver, filter)
@@ -89,8 +92,16 @@ class LyrioOverlayService : Service() {
         }
         view = FlutterView(this, FlutterTextureView(this).apply { isOpaque = false }).apply {
             attachToFlutterEngine(engine!!)
-            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            setBackgroundColor(Color.TRANSPARENT)
         }
+        // Hosted in a Dialog (not a raw WindowManager view) so the public
+        // Window.setBackgroundBlurRadius API can blur only the area behind
+        // this window. FLAG_BLUR_BEHIND would blur the whole screen instead.
+        val dlg = Dialog(this, android.R.style.Theme_Translucent_NoTitleBar).apply {
+            setCancelable(false)
+            setCanceledOnTouchOutside(false)
+        }
+        val w = dlg.window ?: run { stopSelf(); return }
         params = WindowManager.LayoutParams(1, 1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT).apply {
@@ -98,8 +109,30 @@ class LyrioOverlayService : Service() {
             x = LyrioCore.preferences().getInt("windowX", (16 * density).toInt())
             y = LyrioCore.preferences().getInt("windowY", (100 * density).toInt())
         }
+        // Type must be set before show() when using a non-Activity context.
+        w.attributes = params
+        w.setDimAmount(0f)
+        w.setWindowAnimations(0)
+        dlg.setContentView(view!!)
+        dialog = dlg
         sizeAndClamp()
-        manager.addView(view, params)
+        applyBlur(w)
+        w.attributes = params
+        dlg.show()
+    }
+    /** Window-bounded frosted glass (Android 12+). No-op when disabled. */
+    private fun applyBlur(w: Window) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val settings = LyrioCore.settings()
+        // Rounded drawable defines the blur outline; transparent fill keeps
+        // Flutter's own background (opacity/gradient/preset) in charge.
+        w.setBackgroundDrawable(GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = (settings.optDouble("radius", 28.0) * density).toFloat()
+            setColor(Color.TRANSPARENT)
+        })
+        val radius = settings.optDouble("blurRadius", 40.0).toInt().coerceIn(0, 100)
+        w.setBackgroundBlurRadius(if (settings.optBoolean("blurBehind")) radius else 0)
     }
     private var remainderX = 0f
     private var remainderY = 0f
@@ -118,12 +151,15 @@ class LyrioOverlayService : Service() {
         if (settings.optBoolean("keepScreenOn")) params.flags = params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
     }
     fun applySettings() {
+        val w = dialog?.window ?: return
         if (view == null) return
         sizeAndClamp()
-        runCatching { manager.updateViewLayout(view, params) }.onFailure { stopSelf() }
+        applyBlur(w)
+        runCatching { w.attributes = params }.onFailure { stopSelf() }
     }
     fun move(dx: Float, dy: Float) {
-        val v = view ?: return
+        val w = dialog?.window ?: return
+        if (view == null) return
         if (LyrioCore.settings().optBoolean("locked")) return
         // Accumulate fractional pixels: truncating every event drops
         // sub-pixel deltas and makes the window stiff and shaky.
@@ -137,7 +173,7 @@ class LyrioOverlayService : Service() {
         params.x += stepX
         params.y += stepY
         clampPosition()
-        runCatching { manager.updateViewLayout(v, params) }.onFailure { stopSelf() }
+        runCatching { w.attributes = params }.onFailure { stopSelf() }
     }
     fun endMove() {
         if (view == null) return
@@ -150,7 +186,9 @@ class LyrioOverlayService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) { /* Service and its engine intentionally outlive the task. */ }
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
-        view?.let { runCatching { manager.removeView(it) }; it.detachFromFlutterEngine() }
+        runCatching { if (dialog?.isShowing == true) dialog?.dismiss() }
+        dialog = null
+        view?.let { it.detachFromFlutterEngine() }
         view = null
         engine?.lifecycleChannel?.appIsDetached()
         engine?.destroy()
