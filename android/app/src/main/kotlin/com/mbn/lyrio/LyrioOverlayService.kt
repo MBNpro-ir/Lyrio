@@ -20,6 +20,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.Choreographer
 import android.view.Window
 import android.view.WindowManager
 import io.flutter.FlutterInjector
@@ -142,6 +143,20 @@ class LyrioOverlayService : Service() {
     }
     private var remainderX = 0f
     private var remainderY = 0f
+    private var movePending = false
+    /** Touch events arrive faster than the display refresh. Applying the
+     * window layout on every event relayouts the Flutter view dozens of
+     * times per second (log: "Sending viewport metrics") and shakes.
+     * Coalesce to one apply per frame instead. */
+    private fun scheduleMoveApply() {
+        if (movePending) return
+        movePending = true
+        Choreographer.getInstance().postFrameCallback {
+            movePending = false
+            val w = dialog?.window ?: return@postFrameCallback
+            runCatching { w.attributes = params }.onFailure { stopSelf() }
+        }
+    }
     private fun clampPosition() {
         val metrics = resources.displayMetrics
         params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
@@ -164,8 +179,7 @@ class LyrioOverlayService : Service() {
         runCatching { w.attributes = params }.onFailure { stopSelf() }
     }
     fun move(dx: Float, dy: Float) {
-        val w = dialog?.window ?: return
-        if (view == null) return
+        if (view == null || dialog?.window == null) return
         if (LyrioCore.settings().optBoolean("locked")) return
         // Accumulate fractional pixels: truncating every event drops
         // sub-pixel deltas and makes the window stiff and shaky.
@@ -179,12 +193,16 @@ class LyrioOverlayService : Service() {
         params.x += stepX
         params.y += stepY
         clampPosition()
-        runCatching { w.attributes = params }.onFailure { stopSelf() }
+        scheduleMoveApply()
     }
     fun endMove() {
         if (view == null) return
         remainderX = 0f
         remainderY = 0f
+        if (movePending) {
+            movePending = false
+            dialog?.window?.let { w -> runCatching { w.attributes = params } }
+        }
         LyrioCore.preferences().edit().putInt("windowX", params.x).putInt("windowY", params.y).apply()
     }
     fun compact(value: Boolean) { isCompact = value; applySettings() }
