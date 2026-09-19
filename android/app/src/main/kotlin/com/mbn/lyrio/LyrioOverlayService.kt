@@ -18,6 +18,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.Window
 import android.view.WindowManager
@@ -132,7 +133,12 @@ class LyrioOverlayService : Service() {
             setColor(Color.TRANSPARENT)
         })
         val radius = settings.optDouble("blurRadius", 40.0).toInt().coerceIn(0, 100)
-        w.setBackgroundBlurRadius(if (settings.optBoolean("blurBehind")) radius else 0)
+        val enabled = settings.optBoolean("blurBehind") && radius > 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val wm = getSystemService(WindowManager::class.java)
+            Log.d("LyrioOverlay", "applyBlur enabled=$enabled radius=$radius crossWindowBlur=${wm.isCrossWindowBlurEnabled} sdk=${Build.VERSION.SDK_INT}")
+            w.setBackgroundBlurRadius(if (enabled) radius else 0)
+        }
     }
     private var remainderX = 0f
     private var remainderY = 0f
