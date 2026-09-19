@@ -279,20 +279,38 @@ BoxDecoration windowDecoration(
 }) {
   final preset = settings['preset'];
   final opacity = (settings['opacity'] as num).toDouble();
+  final gradient = switch (preset) {
+    'aurora' => LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        colors.primaryContainer.withValues(alpha: opacity),
+        colors.surfaceContainerHigh.withValues(alpha: opacity),
+      ],
+    ),
+    'sunset' => LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        colors.tertiaryContainer.withValues(alpha: opacity),
+        colors.primaryContainer.withValues(alpha: opacity),
+      ],
+    ),
+    'ocean' => LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        colors.secondaryContainer.withValues(alpha: opacity),
+        colors.surfaceContainerHigh.withValues(alpha: opacity),
+      ],
+    ),
+    _ => null,
+  };
   return BoxDecoration(
-    color: preset == 'aurora'
-        ? null
-        : colors.surfaceContainerHigh.withValues(alpha: opacity),
-    gradient: preset == 'aurora'
-        ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colors.primaryContainer.withValues(alpha: opacity),
-              colors.surfaceContainerHigh.withValues(alpha: opacity),
-            ],
-          )
+    color: gradient == null
+        ? colors.surfaceContainerHigh.withValues(alpha: opacity)
         : null,
+    gradient: gradient,
     borderRadius: BorderRadius.circular((settings['radius'] as num).toDouble()),
     border: Border.all(color: colors.outlineVariant.withValues(alpha: .55)),
     // No shadow for the system overlay window: the WindowManager surface is

@@ -134,16 +134,6 @@ class SettingsPage extends StatelessWidget {
                 _slider(c, 'height', 'Height', 140, 900, 'dp', divisions: 76),
                 _slider(
                   c,
-                  'opacity',
-                  'Background opacity',
-                  0,
-                  1,
-                  '%',
-                  multiplier: 100,
-                  divisions: 100,
-                ),
-                _slider(
-                  c,
                   'radius',
                   'Corner radius',
                   0,
@@ -151,33 +141,15 @@ class SettingsPage extends StatelessWidget {
                   'dp',
                   divisions: 100,
                 ),
-                _toggle(
+                _slider(
                   c,
-                  'showHeader',
-                  'Track title',
-                  'Show the title in the window handle',
-                  Icons.title_rounded,
-                ),
-                _toggle(
-                  c,
-                  'hidePaused',
-                  'Hide words while paused',
-                  'Keep the handle available',
-                  Icons.pause_circle_outline_rounded,
-                ),
-                _toggle(
-                  c,
-                  'keepScreenOn',
-                  'Keep screen awake',
-                  'While the floating window is enabled',
-                  Icons.light_mode_outlined,
-                ),
-                _toggle(
-                  c,
-                  'locked',
-                  'Position lock',
-                  'Prevent moving the floating window',
-                  Icons.lock_outline_rounded,
+                  'opacity',
+                  'Background opacity',
+                  0,
+                  1,
+                  '%',
+                  multiplier: 100,
+                  divisions: 100,
                 ),
                 _toggle(
                   c,
@@ -196,6 +168,34 @@ class SettingsPage extends StatelessWidget {
                     'px',
                     divisions: 50,
                   ),
+                _toggle(
+                  c,
+                  'showHeader',
+                  'Track title',
+                  'Show the title in the window handle',
+                  Icons.title_rounded,
+                ),
+                _toggle(
+                  c,
+                  'locked',
+                  'Position lock',
+                  'Prevent moving the floating window',
+                  Icons.lock_outline_rounded,
+                ),
+                _toggle(
+                  c,
+                  'hidePaused',
+                  'Hide words while paused',
+                  'Keep the handle available',
+                  Icons.pause_circle_outline_rounded,
+                ),
+                _toggle(
+                  c,
+                  'keepScreenOn',
+                  'Keep screen awake',
+                  'While the floating window is enabled',
+                  Icons.light_mode_outlined,
+                ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(18, 0, 18, 16),
                   child: Text(
@@ -669,6 +669,8 @@ class _PinnedPreview extends StatelessWidget {
                   children: [
                     for (final preset in [
                       'aurora',
+                      'sunset',
+                      'ocean',
                       'paper',
                       'midnight',
                       'minimal',
@@ -678,13 +680,7 @@ class _PinnedPreview extends StatelessWidget {
                         child: ChoiceChip(
                           label: Text(_presetTitle(preset)),
                           selected: c.choice('preset') == preset,
-                          onSelected: (_) {
-                            c.set('preset', preset);
-                            c.set('radius', preset == 'minimal' ? 16.0 : 28.0);
-                            c.set('opacity', preset == 'paper' ? 1.0 : .94);
-                            c.set('glow', preset == 'aurora');
-                            c.set('mode', preset == 'paper' ? 'full' : 'focus');
-                          },
+                          onSelected: (_) => applyPreset(c, preset),
                         ),
                       ),
                   ],
@@ -699,6 +695,33 @@ class _PinnedPreview extends StatelessWidget {
 
   static String _presetTitle(String value) =>
       value[0].toUpperCase() + value.substring(1);
+}
+
+/// Applies a curated look: each preset owns its gradient, corner radius,
+/// opacity, glow and reading mode. Midnight is always dark, paper always
+/// light; the rest follow the app theme.
+void applyPreset(LyrioController c, String preset) {
+  c.set('preset', preset);
+  c.set(
+    'radius',
+    switch (preset) {
+      'minimal' => 16.0,
+      'ocean' => 32.0,
+      'sunset' => 24.0,
+      _ => 28.0,
+    },
+  );
+  c.set(
+    'opacity',
+    switch (preset) {
+      'paper' => 1.0,
+      'ocean' => .92,
+      'sunset' => .96,
+      _ => .94,
+    },
+  );
+  c.set('glow', preset == 'aurora' || preset == 'sunset' || preset == 'ocean');
+  c.set('mode', preset == 'paper' ? 'full' : 'focus');
 }
 
 class Section extends StatelessWidget {
