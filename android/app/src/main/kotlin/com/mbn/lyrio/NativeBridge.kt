@@ -41,8 +41,12 @@ object NativeBridge {
                         }
                         result.success(null)
                     }
-                    "move" -> {
-                        LyrioOverlayService.instance?.move(call.argument<Number>("dx")!!.toFloat(), call.argument<Number>("dy")!!.toFloat())
+                    "dragStart" -> {
+                        LyrioOverlayService.instance?.dragStart(call.argument<Number>("x")!!.toFloat(), call.argument<Number>("y")!!.toFloat())
+                        result.success(null)
+                    }
+                    "dragTo" -> {
+                        LyrioOverlayService.instance?.dragTo(call.argument<Number>("x")!!.toFloat(), call.argument<Number>("y")!!.toFloat())
                         result.success(null)
                     }
                     "moveEnd" -> {

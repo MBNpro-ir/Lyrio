@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'models.dart';
@@ -68,32 +67,22 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
     if (!_disposed) notifyListeners();
   }
 
-  /// Fire-and-forget window drag: deltas batch into one platform message
-  /// per frame (touch sampling is far faster than the display), and no
-  /// state refresh happens per pointer event.
-  double _batchDx = 0, _batchDy = 0;
-  bool _batchScheduled = false, _dragging = false;
+  /// Window drag uses ABSOLUTE finger positions, not deltas: when the UI
+  /// thread stalls, queued deltas arrive in bursts and summing them makes
+  /// the window overshoot and shake. An absolute target is immune to that —
+  /// every update carries the latest truth, dropped events don't matter.
+  bool _dragging = false;
 
-  void move(double dx, double dy) {
-    _batchDx += dx;
-    _batchDy += dy;
-    if (_batchScheduled) return;
-    _batchScheduled = true;
-    SchedulerBinding.instance.scheduleFrameCallback((_) => _flushMove());
-  }
+  void dragStart(Offset point) => _sendDrag('dragStart', point);
 
-  void _flushMove() {
-    _batchScheduled = false;
-    if (_batchDx == 0 && _batchDy == 0) return;
-    final dx = _batchDx, dy = _batchDy;
-    _batchDx = 0;
-    _batchDy = 0;
-    _sendMove(dx, dy);
-  }
+  void dragTo(Offset point) => _sendDrag('dragTo', point);
 
-  Future<void> _sendMove(double dx, double dy) async {
+  Future<void> _sendDrag(String method, Offset point) async {
     try {
-      await channel.invokeMethod<dynamic>('move', {'dx': dx, 'dy': dy});
+      await channel.invokeMethod<dynamic>(method, {
+        'x': point.dx,
+        'y': point.dy,
+      });
     } on PlatformException catch (e) {
       error = e.message;
       if (!_disposed) notifyListeners();
@@ -113,7 +102,6 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Persists the dragged position once, when the gesture ends.
   Future<void> endMove() async {
-    _flushMove();
     try {
       await channel.invokeMethod<dynamic>('moveEnd');
     } catch (_) {}

@@ -141,9 +141,11 @@ class LyrioOverlayService : Service() {
             w.setBackgroundBlurRadius(if (enabled) radius else 0)
         }
     }
-    private var remainderX = 0f
-    private var remainderY = 0f
     private var movePending = false
+    // Absolute drag state: grab offset between finger and window origin.
+    private var grabDX = 0f
+    private var grabDY = 0f
+    private var dragEvents = 0
     // Hot-path cache: move() runs on every touch event, so it must not
     // parse settings JSON or touch disk. Refreshed in sizeAndClamp().
     private var lockedCached = false
@@ -190,32 +192,33 @@ class LyrioOverlayService : Service() {
         applyBlur(w)
         runCatching { w.attributes = params }.onFailure { stopSelf() }
     }
-    fun move(dx: Float, dy: Float) {
-        if (view == null || dialog?.window == null) return
-        if (lockedCached) return
+    fun dragStart(x: Float, y: Float) {
+        if (view == null || dialog?.window == null || lockedCached) return
+        grabDX = x * densityPx - params.x
+        grabDY = y * densityPx - params.y
         if (!dragging) {
             dragging = true
             appliedFrames = 0
+            dragEvents = 0
             Log.d("LyrioOverlay", "drag start at ${params.x},${params.y}")
         }
-        // Accumulate fractional pixels: truncating every event drops
-        // sub-pixel deltas and makes the window stiff and shaky.
-        remainderX += dx * densityPx
-        remainderY += dy * densityPx
-        val stepX = remainderX.toInt()
-        val stepY = remainderY.toInt()
-        remainderX -= stepX
-        remainderY -= stepY
-        if (stepX == 0 && stepY == 0) return
-        params.x += stepX
-        params.y += stepY
+    }
+    fun dragTo(x: Float, y: Float) {
+        if (view == null || dialog?.window == null || lockedCached) return
+        if (!dragging) {
+            // Start missed (e.g. service restarted mid-gesture): anchor here
+            // so the window never jumps.
+            dragStart(x, y)
+            return
+        }
+        dragEvents++
+        params.x = (x * densityPx - grabDX).toInt()
+        params.y = (y * densityPx - grabDY).toInt()
         clampPosition()
         scheduleMoveApply()
     }
     fun endMove() {
         if (view == null) return
-        remainderX = 0f
-        remainderY = 0f
         if (movePending) {
             movePending = false
             appliedFrames++
@@ -223,7 +226,7 @@ class LyrioOverlayService : Service() {
         }
         if (dragging) {
             dragging = false
-            Log.d("LyrioOverlay", "drag end at ${params.x},${params.y} appliedFrames=$appliedFrames")
+            Log.d("LyrioOverlay", "drag end at ${params.x},${params.y} events=$dragEvents appliedFrames=$appliedFrames")
         }
         LyrioCore.preferences().edit().putInt("windowX", params.x).putInt("windowY", params.y).apply()
     }

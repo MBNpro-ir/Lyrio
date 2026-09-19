@@ -59,10 +59,13 @@ class _OverlayAppState extends State<OverlayApp> {
                   behavior: HitTestBehavior.opaque,
                   onPanStart: c.flag('locked')
                       ? null
-                      : (_) => c.setDragging(true),
+                      : (event) {
+                          c.setDragging(true);
+                          c.dragStart(event.globalPosition);
+                        },
                   onPanUpdate: c.flag('locked')
                       ? null
-                      : (event) => c.move(event.delta.dx, event.delta.dy),
+                      : (event) => c.dragTo(event.globalPosition),
                   onPanEnd: c.flag('locked')
                       ? null
                       : (_) {
