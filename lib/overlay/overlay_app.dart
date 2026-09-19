@@ -38,9 +38,13 @@ class _OverlayAppState extends State<OverlayApp> {
         home: Material(
           type: MaterialType.transparency,
           child: Container(
-            margin: const EdgeInsets.all(3),
+            margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
-            decoration: windowDecoration(theme.colorScheme, c.settings),
+            decoration: windowDecoration(
+              theme.colorScheme,
+              c.settings,
+              shadow: false,
+            ),
             child: Column(
               children: [
                 GestureDetector(

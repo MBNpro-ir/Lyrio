@@ -324,7 +324,11 @@ class _LyricsViewState extends State<LyricsView> {
   }
 }
 
-BoxDecoration windowDecoration(ColorScheme colors, Json settings) {
+BoxDecoration windowDecoration(
+  ColorScheme colors,
+  Json settings, {
+  bool shadow = true,
+}) {
   final preset = settings['preset'];
   final opacity = (settings['opacity'] as num).toDouble();
   return BoxDecoration(
@@ -343,12 +347,17 @@ BoxDecoration windowDecoration(ColorScheme colors, Json settings) {
         : null,
     borderRadius: BorderRadius.circular((settings['radius'] as num).toDouble()),
     border: Border.all(color: colors.outlineVariant.withValues(alpha: .55)),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: .15),
-        blurRadius: 20,
-        offset: const Offset(0, 8),
-      ),
-    ],
+    // No shadow for the system overlay window: the WindowManager surface is
+    // exactly the window size, so a blurred shadow gets clipped into a
+    // square faint halo behind the rounded container.
+    boxShadow: shadow
+        ? [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ]
+        : null,
   );
 }
