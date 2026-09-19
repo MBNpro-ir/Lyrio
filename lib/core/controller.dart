@@ -63,6 +63,26 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Fire-and-forget window drag: no state refresh per pointer event,
+  /// otherwise every move would rebuild the overlay and stutter.
+  Future<void> move(double dx, double dy) async {
+    try {
+      await channel.invokeMethod<dynamic>('move', {'dx': dx, 'dy': dy});
+    } on PlatformException catch (e) {
+      error = e.message;
+      if (!_disposed) notifyListeners();
+    } on MissingPluginException {
+      // Overlay dragging only exists on Android.
+    }
+  }
+
+  /// Persists the dragged position once, when the gesture ends.
+  Future<void> endMove() async {
+    try {
+      await channel.invokeMethod<dynamic>('moveEnd');
+    } catch (_) {}
+  }
+
   Future<bool> action(String name, [dynamic args]) async {
     try {
       await channel.invokeMethod<dynamic>(name, args);

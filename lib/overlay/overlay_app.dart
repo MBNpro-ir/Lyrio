@@ -51,10 +51,8 @@ class _OverlayAppState extends State<OverlayApp> {
                   behavior: HitTestBehavior.opaque,
                   onPanUpdate: c.flag('locked')
                       ? null
-                      : (event) => c.action('move', {
-                          'dx': event.delta.dx,
-                          'dy': event.delta.dy,
-                        }),
+                      : (event) => c.move(event.delta.dx, event.delta.dy),
+                  onPanEnd: c.flag('locked') ? null : (_) => c.endMove(),
                   child: SizedBox(
                     height: _compact ? 68 : 48,
                     child: Padding(

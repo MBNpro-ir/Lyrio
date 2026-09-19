@@ -101,13 +101,19 @@ class LyrioOverlayService : Service() {
         sizeAndClamp()
         manager.addView(view, params)
     }
+    private var remainderX = 0f
+    private var remainderY = 0f
+    private fun clampPosition() {
+        val metrics = resources.displayMetrics
+        params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
+        params.y = params.y.coerceIn(0, (metrics.heightPixels - params.height - (32 * density).toInt()).coerceAtLeast(0))
+    }
     private fun sizeAndClamp() {
         val settings = LyrioCore.settings()
         val metrics = resources.displayMetrics
         params.width = (settings.optDouble("width", 340.0) * density).toInt().coerceIn((160 * density).toInt().coerceAtMost(metrics.widthPixels), metrics.widthPixels)
         params.height = ((if (isCompact) 76.0 else settings.optDouble("height", 310.0)) * density).toInt().coerceIn((64 * density).toInt(), metrics.heightPixels - (40 * density).toInt())
-        params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
-        params.y = params.y.coerceIn(0, (metrics.heightPixels - params.height - (32 * density).toInt()).coerceAtLeast(0))
+        clampPosition()
         params.flags = params.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON.inv()
         if (settings.optBoolean("keepScreenOn")) params.flags = params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
     }
@@ -117,11 +123,26 @@ class LyrioOverlayService : Service() {
         runCatching { manager.updateViewLayout(view, params) }.onFailure { stopSelf() }
     }
     fun move(dx: Float, dy: Float) {
-        if (view == null) return
+        val v = view ?: return
         if (LyrioCore.settings().optBoolean("locked")) return
-        params.x += (dx * density).toInt()
-        params.y += (dy * density).toInt()
-        applySettings()
+        // Accumulate fractional pixels: truncating every event drops
+        // sub-pixel deltas and makes the window stiff and shaky.
+        remainderX += dx * density
+        remainderY += dy * density
+        val stepX = remainderX.toInt()
+        val stepY = remainderY.toInt()
+        remainderX -= stepX
+        remainderY -= stepY
+        if (stepX == 0 && stepY == 0) return
+        params.x += stepX
+        params.y += stepY
+        clampPosition()
+        runCatching { manager.updateViewLayout(v, params) }.onFailure { stopSelf() }
+    }
+    fun endMove() {
+        if (view == null) return
+        remainderX = 0f
+        remainderY = 0f
         LyrioCore.preferences().edit().putInt("windowX", params.x).putInt("windowY", params.y).apply()
     }
     fun compact(value: Boolean) { isCompact = value; applySettings() }

@@ -45,6 +45,10 @@ object NativeBridge {
                         LyrioOverlayService.instance?.move(call.argument<Number>("dx")!!.toFloat(), call.argument<Number>("dy")!!.toFloat())
                         result.success(null)
                     }
+                    "moveEnd" -> {
+                        LyrioOverlayService.instance?.endMove()
+                        result.success(null)
+                    }
                     "compact" -> { LyrioOverlayService.instance?.compact(call.arguments as Boolean); result.success(null) }
                     "permission" -> {
                         check(activity != null) { "Open Lyrio to manage permissions." }
