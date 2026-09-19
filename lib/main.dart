@@ -5,6 +5,7 @@ import 'core/controller.dart';
 import 'core/models.dart';
 import 'ui/home_page.dart';
 import 'ui/settings_page.dart';
+import 'ui/welcome_page.dart';
 import 'overlay/overlay_app.dart';
 
 void main() {
@@ -48,7 +49,12 @@ class LyrioApp extends StatelessWidget {
           'dark' => ThemeMode.dark,
           _ => ThemeMode.system,
         },
-        home: LyrioShell(controller: controller),
+        home:
+            controller.started &&
+                (!controller.stateLoaded ||
+                    !controller.snapshot.requiredPermissionsGranted)
+            ? WelcomePage(controller: controller)
+            : LyrioShell(controller: controller),
       );
     },
   );

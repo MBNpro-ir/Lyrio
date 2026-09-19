@@ -2,8 +2,7 @@
 param()
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$localFlutter = Join-Path $root '.tooling\flutter\bin\flutter.bat'
-$flutterCommand = if (Test-Path -LiteralPath $localFlutter) { $localFlutter } else { (Get-Command flutter -ErrorAction Stop).Source }
+$flutterCommand = (Get-Command flutter -ErrorAction Stop).Source
 Push-Location -LiteralPath $root
 try {
     foreach ($arguments in @(

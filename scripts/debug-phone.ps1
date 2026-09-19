@@ -7,8 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$localFlutter = Join-Path $projectRoot '.tooling\flutter\bin\flutter.bat'
-$flutterCommand = if (Test-Path -LiteralPath $localFlutter) { $localFlutter } else { (Get-Command flutter -ErrorAction Stop).Source }
+$flutterCommand = (Get-Command flutter -ErrorAction Stop).Source
 
 function Invoke-Checked {
     param([string]$Executable, [string[]]$Arguments)

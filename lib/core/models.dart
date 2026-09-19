@@ -127,6 +127,13 @@ class AppSnapshot {
   bool get synced => lines.isNotEmpty && timing;
 }
 
+extension PermissionSnapshot on AppSnapshot {
+  bool get requiredPermissionsGranted =>
+      permissions['listener'] == true &&
+      permissions['overlay'] == true &&
+      permissions['notifications'] == true;
+}
+
 ThemeData lyrioTheme(Color seed, Brightness brightness) {
   final colors = ColorScheme.fromSeed(
     seedColor: seed,

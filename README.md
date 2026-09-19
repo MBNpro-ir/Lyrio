@@ -12,6 +12,7 @@ Package: **com.mbn.lyrio** · **Android 8+ / ARM64 only** · Flutter **3.47.5** 
 - An independent foreground service owns the floating Flutter engine. Removing the activity from Recents does not intentionally stop the service.
 - Synchronized LRC, animated focus lines, automatic scrolling in full mode, adjustable timing offset, and complete scrollable unsynchronized lyrics.
 - Drag, collapse, close, remembered position, size, opacity, corners, text size, spacing, alignment, transitions, active-line glow and pause behavior.
+- Settings keeps a pinned live preview and preset controls visible while the detailed options scroll underneath.
 - Bundled Manrope and Vazirmatn; automatic Persian/Arabic line direction. The app interface is English.
 - LRCLIB, Lyrics.ovh, optional Musixmatch developer key, and multiple custom HTTPS JSON providers with configurable fields/authentication.
 - Android Keystore encrypted API keys, a bounded public-provider cache, sequential network requests and rate-limit cooldowns.
@@ -43,11 +44,11 @@ For installation without a debugger:
 .\scripts\debug-phone.ps1 -DeviceId YOUR_SERIAL
 ```
 
-The script prefers the local `.tooling/flutter` SDK when present; otherwise it uses Flutter on PATH. A fresh clone needs Flutter 3.47.5, JDK 17 or 21, Android SDK 36, NDK 28.2.13676358 and accepted Android SDK licenses. The local SDK is ignored by Git. The global Flutter installation was not upgraded.
+All scripts use the system Flutter installation on PATH. A fresh clone needs Flutter 3.47.5, JDK 17 or 21, Android SDK 36, NDK 28.2.13676358 and accepted Android SDK licenses. The project does not include or provision a separate Flutter SDK.
 
 ## First launch
 
-Use the access cards on Home to grant **Notification access**, **Display over other apps** and **Service notifications**. Then enable **Floating lyrics**. Every permission uses the normal Android settings flow. Battery exemption is optional.
+On the first launch, the Welcome screen guides you through **Notification access**, **Display over other apps** and **Service notifications** before opening Home. Every permission uses the normal Android settings flow. Battery exemption is optional, but recommended on aggressive vendor ROMs. Then enable **Floating lyrics**.
 
 On Android 13+ sideloaded apps, Android may block notification access until you open App info, the overflow menu and **Allow restricted settings**. Vendor Autostart/unrestricted battery options may also be needed.
 

@@ -10,11 +10,13 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
   Json settings = {...defaultSettings};
   String? error;
   bool loading = true, _reading = false, _disposed = false;
+  final bool started;
+  bool stateLoaded = false;
   bool _pending = false;
   Timer? _timer, _saveTimer;
   Future<void> _writes = Future.value();
 
-  LyrioController({bool start = true}) {
+  LyrioController({bool start = true}) : started = start {
     if (start) {
       WidgetsBinding.instance.addObserver(this);
       refresh();
@@ -46,6 +48,7 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
       final raw = await channel.invokeMethod<String>('state');
       if (raw != null && !_disposed) {
         snapshot = AppSnapshot(jsonDecode(raw) as Json);
+        stateLoaded = true;
         if (!_pending) settings = snapshot.settings;
         if (snapshot.serviceError.isNotEmpty) error = snapshot.serviceError;
       }

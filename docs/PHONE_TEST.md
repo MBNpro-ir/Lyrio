@@ -14,7 +14,7 @@
 .\scripts\debug-phone.ps1 -InstallOnly
 ```
 
-۲. در Home مجوزهای Notification access، Display over other apps و Service notifications را یکی‌یکی فعال کنید. اگر Android گزینهٔ دسترسی را مسدود کرد، در App info منوی سه‌نقطه گزینهٔ Allow restricted settings را بررسی کنید.
+۲. در Welcome ابتدا مجوزهای Notification access، Display over other apps و Service notifications را یکی‌یکی فعال کنید؛ تا هر سه مجوز فعال نشوند وارد Home نمی‌شوید. Battery optimization اختیاری است. اگر Android گزینهٔ دسترسی را مسدود کرد، در App info منوی سه‌نقطه گزینهٔ Allow restricted settings را بررسی کنید.
 
 ۳. یک آهنگ در Spotify، YouTube Music یا پلیر خودتان پخش کنید. عنوان، خواننده، منبع و زمان پخش باید مطابق پلیر باشند. بدون انتشار اطلاعات از سوی پلیر، تشخیص تضمین نمی‌شود.
 

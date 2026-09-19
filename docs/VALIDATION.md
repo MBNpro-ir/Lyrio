@@ -1,6 +1,6 @@
 # Validation record — 2026-09-19
 
-Environment: Windows x64, Flutter stable revision 6a19cca564 (3.47.5), Dart 3.13.4, Android SDK 36, NDK 28.2.13676358, JDK 21. The SDK is a detached checkout of the upstream stable revision. The original global Flutter SDK was preserved.
+Environment: Windows x64, Flutter stable revision 6a19cca564 (3.47.5), Dart 3.13.4, Android SDK 36, NDK 28.2.13676358, JDK 21. Initial validation used a temporary SDK checkout at this revision. Development now uses the system Flutter installation on PATH, at the same revision.
 
 | Check | Result |
 |---|---|
