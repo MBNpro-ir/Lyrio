@@ -124,7 +124,13 @@ class _LyricsViewState extends State<LyricsView> {
         ),
       );
     }
-    Widget line(String text, {bool current = false, bool faded = false}) {
+    Widget line(
+      String text, {
+      bool current = false,
+      bool faded = false,
+      List<LyricWord> words = const [],
+      int sungUntilMs = 0,
+    }) {
       final rtl = isRtl(text);
       final align = switch (settings['alignment']) {
         'left' => TextAlign.left,
@@ -135,27 +141,51 @@ class _LyricsViewState extends State<LyricsView> {
       // Keep typography identical for active and idle lines so wrapping
       // never shifts when a line becomes active. Emphasis comes only from
       // color, weight and glow, which do not affect layout.
+      final base = TextStyle(
+        fontFamily: rtl ? 'Vazirmatn' : 'Manrope',
+        fontFamilyFallback: const ['Vazirmatn'],
+        fontSize: size,
+        height: (settings['lineHeight'] as num).toDouble(),
+        fontWeight: current ? FontWeight.w700 : FontWeight.w400,
+        shadows: current && settings['glow'] == true
+            ? [
+                Shadow(
+                  color: color.primary.withValues(alpha: .25),
+                  blurRadius: 18,
+                ),
+              ]
+            : null,
+      );
+      // Karaoke: timed words light up one by one as they are sung.
+      // Weight stays constant so lighting a word never re-wraps the line.
+      if (current && words.isNotEmpty && settings['karaoke'] != false) {
+        return Text.rich(
+          TextSpan(
+            children: [
+              for (final word in words)
+                TextSpan(
+                  text: word.text,
+                  style: base.copyWith(
+                    color: word.timeMs <= sungUntilMs
+                        ? color.onSurface
+                        : color.onSurface.withValues(alpha: .45),
+                  ),
+                ),
+            ],
+          ),
+          textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+          textAlign: align,
+          softWrap: true,
+        );
+      }
       return AnimatedDefaultTextStyle(
         duration: Duration(milliseconds: ms),
         curve: Curves.easeOutCubic,
         textAlign: align,
-        style: TextStyle(
-          fontFamily: rtl ? 'Vazirmatn' : 'Manrope',
-          fontFamilyFallback: const ['Vazirmatn'],
-          fontSize: size,
-          height: (settings['lineHeight'] as num).toDouble(),
-          fontWeight: current ? FontWeight.w700 : FontWeight.w400,
+        style: base.copyWith(
           color: current
               ? color.onSurface
               : color.onSurface.withValues(alpha: faded ? .42 : .7),
-          shadows: current && settings['glow'] == true
-              ? [
-                  Shadow(
-                    color: color.primary.withValues(alpha: .25),
-                    blurRadius: 18,
-                  ),
-                ]
-              : null,
         ),
         child: Text(
           text.isEmpty ? (data.synced ? '♪' : ' ') : text,
@@ -223,6 +253,8 @@ class _LyricsViewState extends State<LyricsView> {
                   faded: isFocus
                       ? (active < 0 || (i - active).abs() > focusRadius)
                       : (data.synced && i < active),
+                  words: data.synced ? data.lines[i].words : const [],
+                  sungUntilMs: position,
                 ),
               ),
             if ((data.lyrics['attribution'] as String? ?? '').isNotEmpty)

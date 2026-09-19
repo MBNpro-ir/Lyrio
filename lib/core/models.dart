@@ -2,14 +2,32 @@ import 'package:flutter/material.dart';
 
 typedef Json = Map<String, dynamic>;
 
+class LyricWord {
+  final int timeMs;
+  final String text;
+  const LyricWord(this.timeMs, this.text);
+}
+
 class LyricLine {
   final int timeMs;
   final String text;
-  const LyricLine(this.timeMs, this.text);
+
+  /// Per-word timings for karaoke lines (`[00:03.00]<00:03.00>Hello
+  /// <00:03.50>world`). Empty for plain line-timed lyrics.
+  final List<LyricWord> words;
+  const LyricLine(this.timeMs, this.text, [this.words = const []]);
+}
+
+int _stampToMs(RegExpMatch stamp) {
+  final fraction = (stamp.group(3) ?? '').padRight(3, '0');
+  return int.parse(stamp.group(1)!) * 60000 +
+      int.parse(stamp.group(2)!) * 1000 +
+      int.parse(fraction);
 }
 
 List<LyricLine> parseLrc(String source) {
   final timestamp = RegExp(r'\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  final inline = RegExp(r'<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>');
   final offsetMatch = RegExp(
     r'\[offset:\s*([+-]?\d+)\]',
     caseSensitive: false,
@@ -19,17 +37,28 @@ List<LyricLine> parseLrc(String source) {
   for (final row in source.split('\n')) {
     final stamps = timestamp.allMatches(row).toList();
     if (stamps.isEmpty) continue;
-    final text = row
-        .substring(stamps.last.end)
-        .replaceAll(RegExp(r'<\d+:\d+(?:\.\d+)?>'), '')
-        .trim();
+    final raw = row.substring(stamps.last.end);
+    // Karaoke: each inline tag starts a timed word running to the next tag.
+    final tags = inline.allMatches(raw).toList();
+    var text = '';
+    var words = const <LyricWord>[];
+    if (tags.isNotEmpty) {
+      final built = <LyricWord>[];
+      final buffer = StringBuffer();
+      for (var i = 0; i < tags.length; i++) {
+        final start = tags[i].end;
+        final end = i + 1 < tags.length ? tags[i + 1].start : raw.length;
+        built.add(LyricWord(_stampToMs(tags[i]) + offset, raw.substring(start, end)));
+        buffer.write(raw.substring(start, end));
+      }
+      text = buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+      words = built;
+    } else {
+      text = raw.trim();
+    }
     for (final stamp in stamps) {
-      final fraction = (stamp.group(3) ?? '').padRight(3, '0');
-      final time =
-          int.parse(stamp.group(1)!) * 60000 +
-          int.parse(stamp.group(2)!) * 1000 +
-          int.parse(fraction);
-      lines.add(LyricLine(time + offset, text));
+      final time = _stampToMs(stamp);
+      lines.add(LyricLine(time + offset, text, words));
     }
   }
   lines.sort((a, b) => a.timeMs.compareTo(b.timeMs));
@@ -85,6 +114,7 @@ const defaultSettings = <String, dynamic>{
   'animation': 'slide',
   'duration': 420.0,
   'glow': true,
+  'karaoke': true,
   'showHeader': true,
   'hidePaused': false,
   'keepScreenOn': false,

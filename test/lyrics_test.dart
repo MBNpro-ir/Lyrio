@@ -30,6 +30,15 @@ void main() {
     final line = parseLrc('[00:03.00]<00:03.00>Hello <00:03.50>world').single;
     expect(line.text, 'Hello world');
   });
+  test('Karaoke words carry per-word timings with global offset', () {
+    final line =
+        parseLrc('[offset:100]\n[00:03.00]<00:03.00>Hello <00:03.50>world')
+            .single;
+    expect(line.text, 'Hello world');
+    expect(line.words.map((w) => w.timeMs), [3100, 3600]);
+    expect(line.words.map((w) => w.text), ['Hello ', 'world']);
+    expect(parseLrc('[00:03]Plain line').single.words, isEmpty);
+  });
   test('First strong script decides direction for mixed Persian and Latin', () {
     expect(isRtl('۱۲۳ — سلام Lyrio'), true);
     expect(isRtl('2026 Hello سلام'), false);

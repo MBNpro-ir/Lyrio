@@ -283,6 +283,13 @@ class SettingsPage extends StatelessWidget {
                   'A gentle accent around the words',
                   Icons.auto_awesome_outlined,
                 ),
+                _toggle(
+                  c,
+                  'karaoke',
+                  'Word-by-word highlight',
+                  'Light up each word as it is sung',
+                  Icons.mic_external_on_outlined,
+                ),
                 const ListTile(
                   leading: Icon(Icons.translate_rounded),
                   title: Text('Persian, beautifully readable'),
