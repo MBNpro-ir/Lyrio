@@ -144,6 +144,14 @@ class LyrioOverlayService : Service() {
     private var remainderX = 0f
     private var remainderY = 0f
     private var movePending = false
+    // Hot-path cache: move() runs on every touch event, so it must not
+    // parse settings JSON or touch disk. Refreshed in sizeAndClamp().
+    private var lockedCached = false
+    private var densityPx = 0f
+    private var maxX = 0
+    private var maxY = 0
+    private var dragging = false
+    private var appliedFrames = 0
     /** Touch events arrive faster than the display refresh. Applying the
      * window layout on every event relayouts the Flutter view dozens of
      * times per second (log: "Sending viewport metrics") and shakes.
@@ -153,20 +161,24 @@ class LyrioOverlayService : Service() {
         movePending = true
         Choreographer.getInstance().postFrameCallback {
             movePending = false
+            appliedFrames++
             val w = dialog?.window ?: return@postFrameCallback
             runCatching { w.attributes = params }.onFailure { stopSelf() }
         }
     }
     private fun clampPosition() {
-        val metrics = resources.displayMetrics
-        params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
-        params.y = params.y.coerceIn(0, (metrics.heightPixels - params.height - (32 * density).toInt()).coerceAtLeast(0))
+        params.x = params.x.coerceIn(0, maxX)
+        params.y = params.y.coerceIn(0, maxY)
     }
     private fun sizeAndClamp() {
         val settings = LyrioCore.settings()
         val metrics = resources.displayMetrics
+        densityPx = metrics.density
         params.width = (settings.optDouble("width", 340.0) * density).toInt().coerceIn((160 * density).toInt().coerceAtMost(metrics.widthPixels), metrics.widthPixels)
         params.height = ((if (isCompact) 76.0 else settings.optDouble("height", 310.0)) * density).toInt().coerceIn((64 * density).toInt(), metrics.heightPixels - (40 * density).toInt())
+        maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
+        maxY = (metrics.heightPixels - params.height - (32 * density).toInt()).coerceAtLeast(0)
+        lockedCached = settings.optBoolean("locked")
         clampPosition()
         params.flags = params.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON.inv()
         if (settings.optBoolean("keepScreenOn")) params.flags = params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
@@ -180,11 +192,16 @@ class LyrioOverlayService : Service() {
     }
     fun move(dx: Float, dy: Float) {
         if (view == null || dialog?.window == null) return
-        if (LyrioCore.settings().optBoolean("locked")) return
+        if (lockedCached) return
+        if (!dragging) {
+            dragging = true
+            appliedFrames = 0
+            Log.d("LyrioOverlay", "drag start at ${params.x},${params.y}")
+        }
         // Accumulate fractional pixels: truncating every event drops
         // sub-pixel deltas and makes the window stiff and shaky.
-        remainderX += dx * density
-        remainderY += dy * density
+        remainderX += dx * densityPx
+        remainderY += dy * densityPx
         val stepX = remainderX.toInt()
         val stepY = remainderY.toInt()
         remainderX -= stepX
@@ -201,7 +218,12 @@ class LyrioOverlayService : Service() {
         remainderY = 0f
         if (movePending) {
             movePending = false
+            appliedFrames++
             dialog?.window?.let { w -> runCatching { w.attributes = params } }
+        }
+        if (dragging) {
+            dragging = false
+            Log.d("LyrioOverlay", "drag end at ${params.x},${params.y} appliedFrames=$appliedFrames")
         }
         LyrioCore.preferences().edit().putInt("windowX", params.x).putInt("windowY", params.y).apply()
     }
