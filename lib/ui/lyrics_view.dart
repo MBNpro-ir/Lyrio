@@ -243,6 +243,20 @@ class _LyricsViewState extends State<LyricsView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (settings['mode'] == 'focus' &&
+                data.status == 'ready' &&
+                !data.synced)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Focus needs synced lyrics — showing the full text.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: color.onSurfaceVariant,
+                  ),
+                ),
+              ),
             for (var i = 0; i < rows.length; i++)
               Padding(
                 key: _keys[i],

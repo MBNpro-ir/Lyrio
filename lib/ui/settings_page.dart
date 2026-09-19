@@ -221,6 +221,13 @@ class SettingsPage extends StatelessWidget {
                   '',
                   divisions: 8,
                 ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(18, 4, 18, 0),
+                  child: Text(
+                    'Focus follows the player clock and needs synced lyrics; otherwise the full text is shown. Focus lines sets how many lines stay bright around the active one.',
+                    style: TextStyle(fontSize: 12, height: 1.5),
+                  ),
+                ),
                 _slider(
                   c,
                   'fontSize',
