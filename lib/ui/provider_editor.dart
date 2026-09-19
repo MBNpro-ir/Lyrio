@@ -180,7 +180,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
                 labelText: 'Endpoint URL',
                 hintText:
                     'https://example.com/lyrics?title={title}&artist={artist}',
-                helperText: '{title}  {artist}  {album}  {duration}',
+                helperText: '{title}  {artist}  {album}  {duration}  {displayTitle}  {composer}  {genre}  {year}  {trackNumber}',
               ),
               validator: (v) {
                 final uri = Uri.tryParse(

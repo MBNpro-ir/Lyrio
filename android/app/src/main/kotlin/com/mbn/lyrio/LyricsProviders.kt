@@ -68,6 +68,32 @@ object LyricsProviders {
     private fun nonNull(json: JSONObject, key: String) = if (json.isNull(key)) "" else json.optString(key)
     private fun lrcResult(json: JSONObject) = result(nonNull(json, "plainLyrics"), nonNull(json, "syncedLyrics"), "LRCLIB", "", json.optBoolean("instrumental"))
 
+    /** Weird player titles ("Song (Remastered 2024) [Live]", "Artist feat. X")
+     * rarely match provider catalogs verbatim. Generate cleaned fallbacks. */
+    private fun stripExtras(s: String): String {
+        var v = s.replace(Regex("\\s*[\\(\\[].*?[\\)\\]]"), "").trim()
+        v = v.replace(Regex("\\s+-\\s+.*(remaster|remix|live|acoustic|version|edit|deluxe).*$", RegexOption.IGNORE_CASE), "").trim()
+        return v
+    }
+    private fun mainArtist(s: String): String =
+        s.split(Regex("\\s+(feat\\.?|ft\\.?|featuring|with|&|×|x|,)\\s+", RegexOption.IGNORE_CASE))
+            .firstOrNull()?.trim().orEmpty().ifEmpty { s }
+
+    /** Ordered (title, artist) attempts: exact first, cleaned variants after. */
+    private fun candidates(track: JSONObject): List<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>()
+        fun add(t: String, a: String) {
+            if (t.isNotBlank() && a.isNotBlank() && !out.contains(t to a)) out.add(t to a)
+        }
+        val title = track.optString("title")
+        val artist = track.optString("artist").ifBlank { track.optString("displaySubtitle") }
+        add(title, artist)
+        add(stripExtras(title), artist)
+        add(title, mainArtist(artist))
+        add(stripExtras(title), mainArtist(artist))
+        return out.take(4)
+    }
+
     fun find(context: Context, track: JSONObject, config: JSONObject, force: Boolean): JSONObject {
         val selected = config.optString("provider", "auto")
         val customSpecs = config.optJSONArray("providers") ?: JSONArray()
@@ -90,8 +116,10 @@ object LyricsProviders {
                     runCatching { JSONObject(file.readText()) }.getOrNull() else null
                 val found = cached ?: when (id) {
                     "lrclib" -> lrclib(track)
-                    "ovh" -> request("https://api.lyrics.ovh/v1/${encode(track.optString("artist"))}/${encode(track.optString("title"))}")?.let {
-                        result(nonNull(JSONObject(it), "lyrics"), "", "Lyrics.ovh")
+                    "ovh" -> candidates(track).firstNotNullOfOrNull { (t, a) ->
+                        request("https://api.lyrics.ovh/v1/${encode(a)}/${encode(t)}")?.let {
+                            result(nonNull(JSONObject(it), "lyrics"), "", "Lyrics.ovh")
+                        }
                     }
                     "musixmatch" -> musixmatch(context, track)
                     else -> {
@@ -114,40 +142,50 @@ object LyricsProviders {
             .put("message", if (failures.isEmpty()) "No lyrics found for this recording." else failures.joinToString("\n"))
     }
     private fun lrclib(track: JSONObject): JSONObject? {
-        val query = Uri.parse("https://lrclib.net/api/get").buildUpon().appendQueryParameter("track_name", track.optString("title"))
-            .appendQueryParameter("artist_name", track.optString("artist"))
+        val tries = candidates(track)
+        val first = tries.firstOrNull() ?: return null
+        val query = Uri.parse("https://lrclib.net/api/get").buildUpon().appendQueryParameter("track_name", first.first)
+            .appendQueryParameter("artist_name", first.second)
         if (track.optString("album").isNotBlank()) query.appendQueryParameter("album_name", track.optString("album"))
         if (track.optLong("duration") > 0) query.appendQueryParameter("duration", (track.optLong("duration") / 1000.0).toString())
         request(query.build().toString())?.let { return lrcResult(JSONObject(it)) }
-        val search = Uri.parse("https://lrclib.net/api/search").buildUpon().appendQueryParameter("track_name", track.optString("title"))
-            .appendQueryParameter("artist_name", track.optString("artist")).build()
-        val matches = JSONArray(request(search.toString()) ?: "[]")
         val normalized: (String) -> String = { it.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "") }
-        val valid = (0 until matches.length()).map { matches.getJSONObject(it) }.filter {
-            normalized(it.optString("trackName")) == normalized(track.optString("title")) &&
-            normalized(it.optString("artistName")) == normalized(track.optString("artist")) &&
-            (track.optLong("duration") <= 0 || abs(it.optDouble("duration") - track.optLong("duration") / 1000.0) <= 3)
+        for ((t, a) in tries) {
+            val search = Uri.parse("https://lrclib.net/api/search").buildUpon().appendQueryParameter("track_name", t)
+                .appendQueryParameter("artist_name", a).build()
+            val matches = JSONArray(request(search.toString()) ?: "[]")
+            val valid = (0 until matches.length()).map { matches.getJSONObject(it) }.filter {
+                normalized(it.optString("trackName")) == normalized(t) &&
+                normalized(it.optString("artistName")) == normalized(a) &&
+                (track.optLong("duration") <= 0 || abs(it.optDouble("duration") - track.optLong("duration") / 1000.0) <= 5)
+            }
+            valid.sortedByDescending { !it.isNull("syncedLyrics") }.firstOrNull()?.let { return lrcResult(it) }
         }
-        return valid.sortedByDescending { !it.isNull("syncedLyrics") }.firstOrNull()?.let { lrcResult(it) }
+        return null
     }
     private fun musixmatch(context: Context, track: JSONObject): JSONObject? {
         val key = KeyVault.read(context, "musixmatch")
         if (key.isBlank()) throw ProviderFailure("Add your developer API key in Settings.")
-        val uri = Uri.parse("https://api.musixmatch.com/ws/1.1/matcher.lyrics.get").buildUpon()
-            .appendQueryParameter("q_track", track.optString("title")).appendQueryParameter("q_artist", track.optString("artist"))
-            .appendQueryParameter("apikey", key).build()
-        val message = JSONObject(request(uri.toString()) ?: return null).getJSONObject("message")
-        val code = message.getJSONObject("header").optInt("status_code")
-        if (code == 404) return null
-        if (code != 200) throw ProviderFailure("API returned status $code; check your plan and key.")
-        val lyric = message.getJSONObject("body").getJSONObject("lyrics")
-        if (lyric.optInt("restricted") == 1) throw ProviderFailure("Lyrics are restricted in your region.")
-        // Keep the returned preview/truncation notice and copyright exactly as supplied.
-        return result(lyric.optString("lyrics_body"), "", "Musixmatch", lyric.optString("lyrics_copyright"))
+        for ((t, a) in candidates(track).take(2)) {
+            val uri = Uri.parse("https://api.musixmatch.com/ws/1.1/matcher.lyrics.get").buildUpon()
+                .appendQueryParameter("q_track", t).appendQueryParameter("q_artist", a)
+                .appendQueryParameter("apikey", key).build()
+            val message = JSONObject(request(uri.toString()) ?: continue).getJSONObject("message")
+            val code = message.getJSONObject("header").optInt("status_code")
+            if (code == 404) continue
+            if (code != 200) throw ProviderFailure("API returned status $code; check your plan and key.")
+            val lyric = message.getJSONObject("body").getJSONObject("lyrics")
+            if (lyric.optInt("restricted") == 1) throw ProviderFailure("Lyrics are restricted in your region.")
+            // Keep the returned preview/truncation notice and copyright exactly as supplied.
+            return result(lyric.optString("lyrics_body"), "", "Musixmatch", lyric.optString("lyrics_copyright"))
+        }
+        return null
     }
     private fun custom(context: Context, track: JSONObject, spec: JSONObject): JSONObject? {
         var url = spec.getString("url")
-        val values = mapOf("title" to track.optString("title"), "artist" to track.optString("artist"), "album" to track.optString("album"), "duration" to (track.optLong("duration") / 1000).toString())
+        val values = mapOf("title" to track.optString("title"), "artist" to track.optString("artist"), "album" to track.optString("album"), "duration" to (track.optLong("duration") / 1000).toString(),
+            "displayTitle" to track.optString("displayTitle"), "composer" to track.optString("composer"), "genre" to track.optString("genre"),
+            "year" to track.optLong("year").takeIf { it > 0 }?.toString().orEmpty(), "trackNumber" to track.optLong("trackNumber").takeIf { it > 0 }?.toString().orEmpty())
         values.forEach { (k, v) -> url = url.replace("{$k}", encode(v)) }
         val headers = mutableMapOf<String, String>()
         val key = KeyVault.read(context, spec.getString("id"))

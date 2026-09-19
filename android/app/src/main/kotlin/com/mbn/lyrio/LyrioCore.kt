@@ -106,6 +106,8 @@ object LyrioCore {
     fun notificationFallback(key: String, title: String, artist: String, packageName: String) {
         fallbackKey = key
         fallback = JSONObject().put("title", title).put("artist", artist).put("album", "")
+            .put("displayTitle", title).put("displaySubtitle", artist).put("composer", "").put("genre", "")
+            .put("trackNumber", 0).put("year", 0)
             .put("package", packageName).put("source", label(packageName)).put("timingAvailable", false)
         updateTrack()
     }
@@ -126,9 +128,15 @@ object LyrioCore {
             .put("artist", metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: "")
             .put("album", metadata.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: "")
             .put("duration", metadata.getLong(MediaMetadata.METADATA_KEY_DURATION))
+            .put("displayTitle", metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "")
+            .put("displaySubtitle", metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE) ?: "")
+            .put("composer", metadata.getString(MediaMetadata.METADATA_KEY_COMPOSER) ?: metadata.getString(MediaMetadata.METADATA_KEY_WRITER) ?: metadata.getString(MediaMetadata.METADATA_KEY_AUTHOR) ?: "")
+            .put("genre", metadata.getString(MediaMetadata.METADATA_KEY_GENRE) ?: "")
+            .put("trackNumber", metadata.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER))
+            .put("year", metadata.getLong(MediaMetadata.METADATA_KEY_YEAR).takeIf { it > 0 } ?: metadata.getString(MediaMetadata.METADATA_KEY_DATE)?.take(4)?.toLongOrNull() ?: 0L)
             .put("source", label(controller!!.packageName)).put("package", controller.packageName)
             .put("timingAvailable", controller.playbackState?.position?.let { it >= 0 } == true)
-        val next = listOf(track.optString("title"), track.optString("artist"), track.optString("album"), track.optLong("duration")).joinToString("|")
+        val next = listOf(track.optString("title"), track.optString("artist"), track.optString("album"), track.optLong("duration"), track.optString("displayTitle")).joinToString("|")
         if (next != signature) { signature = next; fetch() }
     }
     fun fetch(force: Boolean = false) {
