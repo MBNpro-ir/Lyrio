@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'models.dart';
@@ -42,7 +43,7 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> refresh() async {
-    if (_reading || _disposed) return;
+    if (_dragging || _reading || _disposed) return;
     _reading = true;
     try {
       final raw = await channel.invokeMethod<String>('state');
@@ -63,9 +64,30 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Fire-and-forget window drag: no state refresh per pointer event,
-  /// otherwise every move would rebuild the overlay and stutter.
-  Future<void> move(double dx, double dy) async {
+  /// Fire-and-forget window drag: deltas batch into one platform message
+  /// per frame (touch sampling is far faster than the display), and no
+  /// state refresh happens per pointer event.
+  double _batchDx = 0, _batchDy = 0;
+  bool _batchScheduled = false, _dragging = false;
+
+  void move(double dx, double dy) {
+    _batchDx += dx;
+    _batchDy += dy;
+    if (_batchScheduled) return;
+    _batchScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) => _flushMove());
+  }
+
+  void _flushMove() {
+    _batchScheduled = false;
+    if (_batchDx == 0 && _batchDy == 0) return;
+    final dx = _batchDx, dy = _batchDy;
+    _batchDx = 0;
+    _batchDy = 0;
+    _sendMove(dx, dy);
+  }
+
+  Future<void> _sendMove(double dx, double dy) async {
     try {
       await channel.invokeMethod<dynamic>('move', {'dx': dx, 'dy': dy});
     } on PlatformException catch (e) {
@@ -76,8 +98,18 @@ class LyrioController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// While the user drags, the 180ms state polling would rebuild the whole
+  /// overlay under the finger and stall gesture delivery. Freeze it; the
+  /// lyrics simply pause for the length of the gesture.
+  void setDragging(bool value) {
+    if (_dragging == value) return;
+    _dragging = value;
+    if (!value) refresh();
+  }
+
   /// Persists the dragged position once, when the gesture ends.
   Future<void> endMove() async {
+    _flushMove();
     try {
       await channel.invokeMethod<dynamic>('moveEnd');
     } catch (_) {}

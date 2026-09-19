@@ -49,10 +49,19 @@ class _OverlayAppState extends State<OverlayApp> {
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onPanStart: c.flag('locked')
+                      ? null
+                      : (_) => c.setDragging(true),
                   onPanUpdate: c.flag('locked')
                       ? null
                       : (event) => c.move(event.delta.dx, event.delta.dy),
-                  onPanEnd: c.flag('locked') ? null : (_) => c.endMove(),
+                  onPanEnd: c.flag('locked')
+                      ? null
+                      : (_) {
+                          c.setDragging(false);
+                          c.endMove();
+                        },
+                  onPanCancel: () => c.setDragging(false),
                   child: SizedBox(
                     height: _compact ? 68 : 48,
                     child: Padding(
