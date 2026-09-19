@@ -90,6 +90,8 @@ const defaultSettings = <String, dynamic>{
   'keepScreenOn': false,
   'locked': false,
   'visibleLines': 3.0,
+  'blurBehind': false,
+  'blurRadius': 40.0,
   'offsetMs': 0.0,
   'provider': 'auto',
   'fallback': true,

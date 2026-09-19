@@ -179,6 +179,23 @@ class SettingsPage extends StatelessWidget {
                   'Prevent moving the floating window',
                   Icons.lock_outline_rounded,
                 ),
+                _toggle(
+                  c,
+                  'blurBehind',
+                  'Blur behind window',
+                  'Frosted glass over other apps · Android 12+',
+                  Icons.blur_on_rounded,
+                ),
+                if (c.flag('blurBehind'))
+                  _slider(
+                    c,
+                    'blurRadius',
+                    'Blur strength',
+                    0,
+                    100,
+                    'px',
+                    divisions: 50,
+                  ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(18, 0, 18, 16),
                   child: Text(
